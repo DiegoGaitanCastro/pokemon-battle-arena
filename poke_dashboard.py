@@ -49,6 +49,20 @@ st.set_page_config(
 
 st.markdown("""
 <style>
+
+/* -------- THEME-AWARE TEXT COLORS (works in dark + light) -------- */
+:root{
+  --app-text: var(--text-color);
+  --app-text-soft: rgba( var(--text-color-rgb), 0.85);
+}
+
+/* Fallback for older Streamlit versions that may not expose text-color-rgb */
+@supports not (color: rgba(var(--text-color-rgb), 1)) {
+  :root{
+    --app-text-soft: var(--text-color);
+  }
+}            
+
 /* Reserve vertical space so scaled sprites do NOT overlap other elements */
 .sprite-wrap {
     text-align: center;
@@ -76,10 +90,10 @@ st.markdown("""
             
 .poke-name {
     text-align: center;
-    color: white;
+    color: var(--app-text);
     font-size: 3em;
     font-weight: 800;
-    margin: 0 0 4px 0;   /* <<< controls the space under the name */
+    margin: 0 0 4px 0;
 }
             
 /* ---------- CARD LAYOUT ---------- */
@@ -111,7 +125,7 @@ st.markdown("""
 .move-subtitle {
     font-size: 1.1em;
     font-weight: 800;
-    color: rgba(255,255,255,0.85);
+    color: var(--app-text-soft);
     margin-bottom: 10px;
 }
 
@@ -208,7 +222,7 @@ div[data-testid="stButton"] > button:active{
     font-size: 2.0rem;
     font-weight: 1000;
     letter-spacing: 0.02em;
-    color: rgba(255,255,255,0.95);
+    color: var(--app-text);
 }
 
 .winner-sprite-wrap {
@@ -239,7 +253,7 @@ def render_sprite(url: str):
         st.markdown(
             """
             <div class="sprite-wrap">
-                <div style="font-size: 5rem; font-weight: 900; color: white; opacity: 0.85;">???</div>
+                <div style="font-size: 5rem; font-weight: 900; color: var(--app-text); opacity: 0.85;">???</div>
             </div>
             """,
             unsafe_allow_html=True
@@ -283,6 +297,7 @@ st.markdown(
         max-width: 1100px;
         width: 100%;
         padding: 0 1rem;
+        color: var(--app-text);
       }}
 
       .hero-logo {{
@@ -298,13 +313,14 @@ st.markdown(
         letter-spacing: 0.06em;
         text-align: center;
         width: 100%;
+        color: var(--app-text);
       }}
 
       .hero-subtitle {{
         margin-top: 6px;
         margin-bottom: 0px;
         font-size: 1.05rem;
-        color: rgba(255,255,255,0.85);
+        color: var(--app-text-soft);
         text-align: center;
         width: 100%;
       }}
@@ -499,7 +515,7 @@ with col1:
     ])
 
     st.markdown(f"""
-    <div style='text-align: center; font-weight: bold; font-size: 1.2em; color: white;'>
+    <div style='text-align: center; font-weight: bold; font-size: 1.2em; color: var(--app-text);'>
         Types: {type_badges_p1 or 'Unknown'}
     </div>
     """, unsafe_allow_html=True)
@@ -514,7 +530,7 @@ with col1:
     ])
 
     st.markdown(f"""
-    <div style='text-align: center; font-weight: bold; font-size: 1.15em; color: white; margin-top: 10px;'>
+    <div style='text-align: center; font-weight: bold; font-size: 1.15em; color: var(--app-text); margin-top: 10px;'>
         Weak against: {weak_badges_p1 if weak_badges_p1 else '—'}
     </div>
     """, unsafe_allow_html=True)
@@ -576,7 +592,7 @@ with col2:
     ])
 
     st.markdown(f"""
-    <div style='text-align: center; font-weight: bold; font-size: 1.2em; color: white;'>
+    <div style='text-align: center; font-weight: bold; font-size: 1.2em; color: var(--app-text);'>
         Types: {type_badges_p2 or 'Unknown'}
     </div>
     """, unsafe_allow_html=True)
@@ -591,7 +607,7 @@ with col2:
     ])
 
     st.markdown(f"""
-    <div style='text-align: center; font-weight: bold; font-size: 1.15em; color: white; margin-top: 10px;'>
+    <div style='text-align: center; font-weight: bold; font-size: 1.15em; color: var(--app-text); margin-top: 10px;'>
         Weak against: {weak_badges_p2 if weak_badges_p2 else '—'}
     </div>
     """, unsafe_allow_html=True)
