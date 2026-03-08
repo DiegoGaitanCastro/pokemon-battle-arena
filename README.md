@@ -104,7 +104,7 @@ COLD START (Server boot)
 - Reruns when ready  
 
 WARM START (New session / refresh)
-- Short 1-second splash screen  
+- Short 1-second loading screen  
 - Only shown once per session  
 
 The slideshow is CSS-based and does not rely on JavaScript.
