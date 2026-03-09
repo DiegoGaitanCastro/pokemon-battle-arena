@@ -2,19 +2,9 @@
 
 An interactive Pokémon combat simulator built with Streamlit using real-time data from the PokeAPI.
 
-⚠️ **Recommended:** For the best visual experience, please use the app in **Dark Theme mode**.  
-The UI styling, metallic battle button, glow effects, and overall design are optimized for Streamlit’s Dark Theme.
-
-You can enable it via:
-Menu (⋮) → Settings → Theme → Dark
-
----
-
 This application allows users to:
 - Select two Pokémon (manual input or randomizer)
 - Apply type and class filters
-- Quickly randomize both Pokémon instantly (no filters)
-- Reset all filters + selections instantly
 - Choose damaging moves
 - Simulate a full turn-based battle
 - View battle logs and HP-over-time charts
@@ -106,7 +96,7 @@ COLD START (Server boot)
 - Reruns when ready  
 
 WARM START (New session / refresh)
-- Short 1-second loading screen  
+- Short 1-second splash screen  
 - Only shown once per session  
 
 The slideshow is CSS-based and does not rely on JavaScript.
@@ -118,7 +108,7 @@ The slideshow is CSS-based and does not rely on JavaScript.
 Users can:
 
 • Manually input Pokémon names  
-• Randomize both Pokémon at once (filters optional)  
+• Randomize both Pokémon at once  
 • Randomize Pokémon individually  
 • Apply filters:
   - Type filter (AND logic: must include all selected types)  
@@ -126,29 +116,6 @@ Users can:
 • Toggle shiny sprites per Pokémon  
 
 If no Pokémon matches selected filters, a graceful error message is shown.
-
----
-
-## ⚡ Quick Actions Bar (Instant Buttons)
-
-Above the main randomizer dropdown, the UI includes two fast actions designed for instant setup/reset:
-
-### ⚡🎲 Quick Randomize Both Pokémon (No Filters)
-- Randomizes **both Pokémon immediately** using the **full Pokédex pool**
-- **Ignores all filters**, and also **clears**:
-  - Global filters
-  - Pokémon 1 filters
-  - Pokémon 2 filters
-- Also assigns a **random damaging move** to each Pokémon automatically  
-- Built for rapid matchups and quick demos
-
-### RESET ↻
-A true “hard reset” of the selection state:
-- Clears **all filters** (global + per-Pokémon)
-- Clears **both Pokémon names**
-- Clears **both move selections**
-- Resets **shiny toggles** back to false
-- Instantly returns the UI to an empty selection state
 
 ---
 
@@ -258,6 +225,48 @@ Only .jpg files are used for the slideshow.
 • After warmup, the app runs instantly.  
 • Invalid Pokémon names display a placeholder.  
 • Forms without damaging moves fall back to default variety.  
+
+---
+
+# 👥 Contributions
+
+This project was developed collaboratively by five team members with equal contribution across design, implementation, testing, and documentation.
+
+### Diego Gaitán
+- Dashboard layout and UI structure
+- Plotly visualizations (stat comparison & HP chart)
+- Battle log formatting and result display
+- Winner celebration UI
+
+### Juan José Rincón
+- API integration (Pokémon, Move, Type endpoints)
+- Retry-enabled HTTP session implementation
+- Data extraction helpers and error handling logic
+- Battle damage formula implementation
+
+### Luka Tcheisvili
+- Performance optimization and caching architecture
+- Global type, class, and move indices
+- Boot warmup gate (cold vs warm start logic)
+- Concurrency implementation with ThreadPoolExecutor
+
+### Cecile Tambey
+- Pokémon selection system (filters, randomizers, quick reset)
+- Session state management
+- Move filtering and fallback logic
+- Edge case handling (invalid names, empty filters)
+
+### Romain Gelin
+- CSS styling and interface design
+- Loader system (fullscreen + slideshow)
+- Custom battle and quick action buttons
+- README documentation and deployment setup
+
+All members participated in:
+- Feature planning and architecture decisions  
+- Debugging and testing  
+- Code review and performance validation  
+- Final deployment to Streamlit Cloud  
 
 ---
 
