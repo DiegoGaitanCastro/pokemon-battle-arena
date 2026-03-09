@@ -13,6 +13,8 @@ Menu (⋮) → Settings → Theme → Dark
 This application allows users to:
 - Select two Pokémon (manual input or randomizer)
 - Apply type and class filters
+- Quickly randomize both Pokémon instantly (no filters)
+- Reset all filters + selections instantly
 - Choose damaging moves
 - Simulate a full turn-based battle
 - View battle logs and HP-over-time charts
@@ -116,7 +118,7 @@ The slideshow is CSS-based and does not rely on JavaScript.
 Users can:
 
 • Manually input Pokémon names  
-• Randomize both Pokémon at once  
+• Randomize both Pokémon at once (filters optional)  
 • Randomize Pokémon individually  
 • Apply filters:
   - Type filter (AND logic: must include all selected types)  
@@ -124,6 +126,29 @@ Users can:
 • Toggle shiny sprites per Pokémon  
 
 If no Pokémon matches selected filters, a graceful error message is shown.
+
+---
+
+## ⚡ Quick Actions Bar (Instant Buttons)
+
+Above the main randomizer dropdown, the UI includes two fast actions designed for instant setup/reset:
+
+### ⚡🎲 Quick Randomize Both Pokémon (No Filters)
+- Randomizes **both Pokémon immediately** using the **full Pokédex pool**
+- **Ignores all filters**, and also **clears**:
+  - Global filters
+  - Pokémon 1 filters
+  - Pokémon 2 filters
+- Also assigns a **random damaging move** to each Pokémon automatically  
+- Built for rapid matchups and quick demos
+
+### RESET ↻
+A true “hard reset” of the selection state:
+- Clears **all filters** (global + per-Pokémon)
+- Clears **both Pokémon names**
+- Clears **both move selections**
+- Resets **shiny toggles** back to false
+- Instantly returns the UI to an empty selection state
 
 ---
 
