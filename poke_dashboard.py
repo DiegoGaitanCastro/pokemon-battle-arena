@@ -1,20 +1,20 @@
 # 1. SETUP & CONFIGURATION
 
 import streamlit as st
-import streamlit.components.v1 as components
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
 import random
 import pandas as pd
 import plotly.express as px
-import os
+
 import base64
 import time
 import textwrap
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+import threading
 import logging
 
 # Silence verbose HTTP/connection logs that sometimes appear in Streamlit UI during heavy fetches
@@ -55,8 +55,6 @@ def get_asset_b64(filename: str) -> str:
         return img_to_base64(path)  # works for PNG/GIF/JPG
     except Exception:
         return ""
-
-import textwrap
 
 def fullscreen_loader_html(pikachu_b64: str, text: str = "Loading…", opaque: bool = False) -> str:
     pikachu_tag = ""
@@ -270,15 +268,12 @@ TYPE_COLORS = {
     "Steel": "#B8B8D0", "Fairy": "#EE99AC"
 }
 
-def _is_light_hex(hex_color: str) -> bool:
-    h = (hex_color or "#808080").lstrip("#")
-    if len(h) != 6:
-        return False
-    r = int(h[0:2], 16)
-    g = int(h[2:4], 16)
-    b = int(h[4:6], 16)
-    brightness = 0.299*r + 0.587*g + 0.114*b
-    return brightness > 160
+# --- Shared constants (avoid duplication) ---
+TYPE_OPTIONS = list(TYPE_COLORS.keys())
+CLASS_OPTIONS = ["Legendary", "Mythical", "Baby", "Mega", "Battle-only", "Default", "Gmax"]
+
+# Used in multiple places (index building + classification)
+BATTLE_ONLY_MARKERS = ["-battle", "-totem", "-school", "-zen", "-mode", "-blade", "-busted", "-hangry"]
 
 def type_chip_html(type_name: str) -> str:
     """Colored chip for a Pokemon type (Fire/Water/etc) with ALWAYS white text."""
@@ -843,6 +838,251 @@ div[data-testid="stButton"] > button[kind="primary"]:focus{
     inset 0 -10px 18px rgba(0,0,0,0.40) !important;
 }
 
+/* ---------- BATTLE + QUICK BUTTONS (GRAPHITE METAL) ---------- */
+
+/* Shared metal look for BOTH buttons (battle + quick) */
+.battle-btn div[data-testid="stButton"] > button,
+.quick-btn  div[data-testid="stButton"] > button{
+  display: block !important;
+  margin: 18px auto 8px auto !important;
+
+  border-radius: 26px !important;
+
+  font-weight: 1000 !important;
+  letter-spacing: 0.10em !important;
+  color: rgba(255,255,255,0.92) !important;
+
+  background:
+    radial-gradient(120px 90px at 18% 22%, rgba(255,255,255,0.16), transparent 60%),
+    radial-gradient(380px 220px at 70% 10%, rgba(124,77,255,0.10), transparent 55%),
+    linear-gradient(180deg, #3a3f48 0%, #272b33 46%, #1b1f27 100%) !important;
+
+  border: 1px solid rgba(255,255,255,0.14) !important;
+
+  box-shadow:
+    0 18px 50px rgba(0,0,0,0.62),
+    inset 0 -10px 18px rgba(0,0,0,0.40) !important;
+
+  position: relative !important;
+  overflow: hidden !important;
+  transform: translateZ(0);
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease !important;
+}
+
+/* Top-edge highlight */
+.battle-btn div[data-testid="stButton"] > button::after,
+.quick-btn  div[data-testid="stButton"] > button::after{
+  content:"";
+  position:absolute;
+  left: 12px;
+  right: 12px;
+  top: 6px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.00));
+  opacity: 0.2;
+  pointer-events:none;
+}
+
+/* Sheen sweep */
+.battle-btn div[data-testid="stButton"] > button::before,
+.quick-btn  div[data-testid="stButton"] > button::before{
+  content:"";
+  position:absolute;
+  top:-70%;
+  left:-65%;
+  width: 55%;
+  height: 260%;
+  transform: rotate(25deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.20), transparent);
+  filter: blur(1px);
+  opacity: 0.0;
+  transition: opacity 160ms ease;
+  pointer-events:none;
+}
+
+/* Hover */
+.battle-btn div[data-testid="stButton"] > button:hover,
+.quick-btn  div[data-testid="stButton"] > button:hover{
+  filter: brightness(1.10) contrast(1.04) saturate(1.02) !important;
+  transform: translateY(-3px) scale(1.01) !important;
+
+  box-shadow:
+    0 22px 70px rgba(0,0,0,0.70),
+    0 0 0 1px rgba(124,77,255,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 -10px 18px rgba(0,0,0,0.42) !important;
+}
+
+.battle-btn div[data-testid="stButton"] > button:hover::before,
+.quick-btn  div[data-testid="stButton"] > button:hover::before{
+  opacity: 1.0;
+  animation: battleSheen 850ms ease forwards;
+}
+
+/* Active */
+.battle-btn div[data-testid="stButton"] > button:active,
+.quick-btn  div[data-testid="stButton"] > button:active{
+  transform: translateY(1px) scale(0.995) !important;
+  filter: brightness(0.98) !important;
+}
+
+/* Focus */
+.battle-btn div[data-testid="stButton"] > button:focus,
+.quick-btn  div[data-testid="stButton"] > button:focus{
+  outline: none !important;
+  box-shadow:
+    0 18px 50px rgba(0,0,0,0.62),
+    0 0 0 4px rgba(124,77,255,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.12),
+    inset 0 -10px 18px rgba(0,0,0,0.40) !important;
+}
+
+/* Sizes: Battle stays huge, Quick matches look but is smaller */
+.battle-btn div[data-testid="stButton"] > button{
+  padding: 26px 78px !important;
+  font-size: 2.75rem !important;
+}
+
+.quick-btn div[data-testid="stButton"] > button{
+  padding: 18px 44px !important;
+  font-size: 1.55rem !important;
+}  
+
+/* --- QUICK ROW: lock both buttons to identical height --- */
+:root{
+  --quick-row-btn-minh: 72px;   /* adjust once if you ever tweak quick button size */
+}
+
+/* ---------- QUICK ROW ALIGNMENT FIX ---------- */
+
+/* Make the whole quick row a flex container */
+.quick-btn {
+  display: flex !important;
+  align-items: center !important;   /* vertically center both buttons */
+  gap: 12px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Streamlit column wrappers must also center content */
+.quick-btn > div[data-testid="column"],
+.quick-btn > div[data-testid="column"] > div {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Left column grows, right stays natural width */
+.quick-btn > div[data-testid="column"]:first-child {
+  flex: 1 1 auto !important;
+}
+
+/* Remove vertical margins so alignment is controlled by flex */
+.quick-btn div[data-testid="stButton"] > button,
+.quick-reset div[data-testid="stButton"] > button {
+  margin: 0 !important;
+}            
+
+/* Force the quick randomize button height */
+.quick-btn div[data-testid="stButton"] > button{
+  min-height: var(--quick-row-btn-minh) !important;
+  line-height: 1 !important; /* prevents font metrics from changing height */
+}
+
+/* ---------- QUICK ROW (reliable alignment fix) ---------- */
+.quick-row-anchor {
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* Target the Streamlit horizontal block right after the anchor */
+.quick-row-anchor + div[data-testid="stHorizontalBlock"] {
+  align-items: center !important;  /* vertical align columns */
+}
+
+/* Make both buttons identical height + remove auto margins */
+.quick-row-anchor + div[data-testid="stHorizontalBlock"] div[data-testid="stButton"] > button {
+  margin: 0 !important;
+  min-height: 72px !important;
+  height: 72px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}            
+
+/* RESET button: full width, same height as quick randomize (fixed) */
+.quick-reset div[data-testid="stButton"] > button{
+  display: flex !important;                 /* center contents vertically */
+  align-items: center !important;
+  justify-content: center !important;
+
+  margin: 18px 0px 8px 0px !important;
+  border-radius: 26px !important;
+
+  /* Keep the same visual padding / font-size as quick button */
+  padding: 18px 44px !important;
+  font-size: 1.55rem !important;
+  font-weight: 1000 !important;
+  letter-spacing: 0.10em !important;
+  color: rgba(255,255,255,0.92) !important;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+
+  background:
+    radial-gradient(120px 90px at 18% 22%, rgba(255,255,255,0.10), transparent 60%),
+    radial-gradient(380px 220px at 70% 10%, rgba(124,77,255,0.06), transparent 55%),
+    linear-gradient(180deg, #2b2f37 0%, #1a1d23 60%, #111317 100%) !important;
+
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  box-shadow:
+    0 18px 50px rgba(0,0,0,0.62),
+    inset 0 -10px 18px rgba(0,0,0,0.40) !important;
+
+  min-height: var(--quick-row-btn-minh) !important;
+  height: var(--quick-row-btn-minh) !important;
+  line-height: 1 !important;                 /* rely on flex centering instead of line-height */
+  box-sizing: border-box !important;
+
+  position: relative !important;
+  overflow: hidden !important;
+  transform: translateZ(0);
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease !important;
+}
+
+/* Hover */
+.quick-reset div[data-testid="stButton"] > button:hover{
+  filter: brightness(1.10) contrast(1.04) saturate(1.02) !important;
+  transform: translateY(-3px) scale(1.01) !important;
+  box-shadow:
+    0 22px 70px rgba(0,0,0,0.70),
+    0 0 0 1px rgba(124,77,255,0.22),
+    inset 0 1px 0 rgba(255,255,255,0.14),
+    inset 0 -10px 18px rgba(0,0,0,0.42) !important;
+}
+
+/* Active */
+.quick-reset div[data-testid="stButton"] > button:active{
+  transform: translateY(1px) scale(0.995) !important;
+  filter: brightness(0.98) !important;
+}
+
+/* Make ALL wrapper divs stretch to fill the column — this is the key fix */
+.quick-reset {
+  width: 100% !important;
+  display: block !important;
+}
+.quick-reset > div,
+.quick-reset div[data-testid="stButton"] {
+  width: 100% !important;
+  display: block !important;
+}          
+
 /* ---------- WINNER CELEBRATION ---------- */
 .winner-card {
     margin-top: 14px;
@@ -1214,12 +1454,23 @@ def get_weaknesses(defender_types):
     return weak
 
 @st.cache_data(show_spinner=False)
-def get_moves_with_types(pokemon_moves):
+def get_weaknesses_cached(defender_types: tuple[str, ...]) -> dict[str, float]:
+    # Type safety: cached function must only ever receive a tuple
+    if not isinstance(defender_types, tuple):
+        raise TypeError(
+            f"get_weaknesses_cached() expects tuple[str, ...], got {type(defender_types).__name__}"
+        )
+
+    # No need to convert to list; get_weaknesses can iterate tuples fine
+    return get_weaknesses(defender_types)
+
+@st.cache_data(show_spinner=False)
+def get_moves_with_types(pokemon_moves: tuple[str, ...]):
     """Get move types for dropdown coloring (instant via move index)."""
     move_idx = get_move_index()
     move_types = {}
 
-    for move_name in pokemon_moves or []:
+    for move_name in pokemon_moves or ():
         info = move_idx.get(move_name) or {}
         move_types[move_name] = (info.get("type") or "")
 
@@ -1235,9 +1486,6 @@ def is_gmax_form(pokemon_data: dict) -> bool:
 # =========================
 # FAST FILTERED RANDOMIZER (NO GLOBAL INDEX)
 # =========================
-
-TYPE_OPTIONS = list(TYPE_COLORS.keys())
-CLASS_OPTIONS = ["Legendary", "Mythical", "Baby", "Mega", "Battle-only", "Default", "Gmax"]
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_species_by_name(name: str) -> dict:
@@ -1275,8 +1523,6 @@ def get_class_index() -> dict:
     gmax = set()
     battle_only = set()
 
-    battle_only_markers = ["-battle", "-totem", "-school", "-zen", "-mode", "-blade", "-busted", "-hangry"]
-
     # Fetch species concurrently to reduce initial build time
     def fetch_one_species(sname: str) -> dict:
         return fetch_species_by_name(sname)
@@ -1313,7 +1559,7 @@ def get_class_index() -> dict:
                     gmax.add(p)
                 if "-mega" in pn:
                     mega.add(p)
-                if any(m in pn for m in battle_only_markers):
+                if any(m in pn for m in BATTLE_ONLY_MARKERS):
                     battle_only.add(p)
 
     return {
@@ -1391,35 +1637,6 @@ def get_move_index() -> dict:
 
     return idx
 
-def classify_from_species_and_name(pokemon_name: str, species_data: dict) -> dict:
-    pokemon_name = (pokemon_name or "").lower()
-
-    flags = {
-        "Legendary": bool(species_data.get("is_legendary", False)),
-        "Mythical": bool(species_data.get("is_mythical", False)),
-        "Baby": bool(species_data.get("is_baby", False)),
-        "Gmax": pokemon_name.endswith("-gmax"),
-        "Mega": ("-mega" in pokemon_name),
-        "Battle-only": False,
-        "Default": False,
-    }
-
-    varieties = species_data.get("varieties", []) if species_data else []
-
-    # Default variety match
-    for v in varieties:
-        p = (v.get("pokemon") or {}).get("name", "").lower()
-        if p == pokemon_name and v.get("is_default") is True:
-            flags["Default"] = True
-            break
-
-    # Battle-only heuristic (common patterns)
-    battle_only_markers = ["-battle", "-totem", "-school", "-zen", "-mode", "-blade", "-busted", "-hangry"]
-    if any(m in pokemon_name for m in battle_only_markers):
-        flags["Battle-only"] = True
-
-    return flags
-
 def pokemon_matches_filters(pokemon_name: str, type_filters: list[str], class_filters: list[str]) -> bool:
     if not pokemon_name:
         return False
@@ -1458,8 +1675,6 @@ def pick_random_pokemon_name(all_names: list[str], type_filters: list[str], clas
 # Cold start: show loader until EVERYTHING is loaded
 # Warm start (refresh/new session): show loader for 1s only
 # =========================
-
-import threading
 
 @st.cache_resource(show_spinner=False)
 def get_boot_state():
@@ -1675,9 +1890,6 @@ hero_html = (hero_html
 
 st.markdown(hero_html, unsafe_allow_html=True)
 
-TYPE_OPTIONS = list(TYPE_COLORS.keys())
-CLASS_OPTIONS = ["Legendary", "Mythical", "Baby", "Mega", "Battle-only", "Default", "Gmax"]
-
 # ---------- COLLAPSIBLE FILTERS / RANDOMIZERS (COMPACT) ----------
 
 st.session_state.setdefault("open_global", False)
@@ -1703,8 +1915,126 @@ def dropdown_header(title: str, button_label: str, button_key: str, subtitle=Non
     st.markdown(html, unsafe_allow_html=True)
     return st.button(button_label, key=button_key)
 
+def render_filter_chips(type_list, class_list, empty_text="No filters selected"):
+    chips = []
+    for t in type_list or []:
+        chips.append(type_chip_html(t))
+    for c in class_list or []:
+        chips.append(f'<span class="micro"><span class="dot purple"></span>{c}</span>')
+
+    st.markdown(
+        f"""
+        <div class="microchips">
+          {("".join(chips) if chips else f'<span class="micro"><span class="dot"></span>{empty_text}</span>')}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+# =========================================================
+# QUICK RANDOMIZE (NO FILTERS) — OUTSIDE RANDOMIZER DROPDOWN
+# =========================================================
+
+def _quick_randomize_both():
+    # 1) HARD RESET widget keys (best way to instantly clear multiselects)
+    for k in (
+        "global_type_filters_widget", "global_class_filters_widget",
+        "p1_type_filters_widget", "p1_class_filters_widget",
+        "p2_type_filters_widget", "p2_class_filters_widget",
+    ):
+        st.session_state.pop(k, None)  # <-- important (prevents “one-run-late” visual updates)
+
+    # 2) Reset derived filter lists
+    for k in (
+        "global_type_filters", "global_class_filters",
+        "p1_type_filters", "p1_class_filters",
+        "p2_type_filters", "p2_class_filters",
+    ):
+        st.session_state[k] = []
+
+    # 3) Use already-cached full list
+    names = st.session_state.get("pokemon_names_all_cached") or fetch_all_pokemon_names()
+
+    if not names:
+        st.session_state["p1_name"] = ""
+        st.session_state["p2_name"] = ""
+        st.session_state["p1_move"] = ""
+        st.session_state["p2_move"] = ""
+        return
+
+    # Pick two different Pokémon
+    a = random.choice(names)
+    b = random.choice(names)
+    tries = 0
+    while b == a and tries < 30:
+        b = random.choice(names)
+        tries += 1
+
+    st.session_state["p1_name"] = a
+    st.session_state["p2_name"] = b
+
+    # Pick random damaging moves
+    p1_raw = fetch_pokemon(a)
+    p2_raw = fetch_pokemon(b)
+
+    p1_moves = get_damaging_moves_with_fallback(p1_raw)
+    p2_moves = get_damaging_moves_with_fallback(p2_raw)
+
+    st.session_state["p1_move"] = random.choice(p1_moves) if p1_moves else ""
+    st.session_state["p2_move"] = random.choice(p2_moves) if p2_moves else ""
+
+def _quick_reset():
+    # 1) HARD RESET widget keys (instantly clears multiselect UI)
+    for k in (
+        "global_type_filters_widget", "global_class_filters_widget",
+        "p1_type_filters_widget", "p1_class_filters_widget",
+        "p2_type_filters_widget", "p2_class_filters_widget",
+    ):
+        st.session_state.pop(k, None)
+
+    # 2) Reset derived filter lists
+    for k in (
+        "global_type_filters", "global_class_filters",
+        "p1_type_filters", "p1_class_filters",
+        "p2_type_filters", "p2_class_filters",
+    ):
+        st.session_state[k] = []
+
+    # 3) Reset selections
+    st.session_state["p1_name"] = ""
+    st.session_state["p2_name"] = ""
+    st.session_state["p1_move"] = ""
+    st.session_state["p2_move"] = ""
+
+    # 4) Optional: reset shinies too (recommended for a true reset)
+    st.session_state["shiny_p1"] = False
+    st.session_state["shiny_p2"] = False
+
+# ---------- QUICK RANDOMIZE (NO FILTERS) + RESET (ALIGNED) ----------
+st.markdown('<div class="quick-row-anchor"></div>', unsafe_allow_html=True)
+
+q1, q2 = st.columns([5, 1], gap="small", vertical_alignment="center")
+
+with q1:
+    st.button(
+        "⚡🎲 QUICK RANDOMIZE BOTH POKÉMON (NO FILTERS)",
+        key="quick_rand_both",
+        type="primary",
+        on_click=_quick_randomize_both,
+        use_container_width=True,
+    )
+
+with q2:
+    st.button(
+        "↻ RESET",
+        key="quick_reset",
+        type="primary",
+        on_click=_quick_reset,
+        use_container_width=True,
+    )
+
 # ---------- SINGLE DROPDOWN WRAPPER (EVERYTHING INSIDE) ----------
-with st.expander("🎲 POKÉMON RANDOMIZER", expanded=False):
+with st.expander("🎲 POKÉMON RANDOMIZER OPTIONS", expanded=False):
 
     # --- 1) GLOBAL: Pokémon Randomizer (header + button) ---
     clicked_global_randomize = dropdown_header(
@@ -1781,19 +2111,10 @@ with st.expander("🎲 POKÉMON RANDOMIZER", expanded=False):
             )
             st.session_state["global_class_filters"] = st.session_state["global_class_filters_widget"]
 
-        chips = []
-        for t in st.session_state["global_type_filters"]:
-            chips.append(type_chip_html(t))
-        for c in st.session_state["global_class_filters"]:
-            chips.append(f'<span class="micro"><span class="dot purple"></span>{c}</span>')
-
-        st.markdown(
-            f"""
-            <div class="microchips">
-              {("".join(chips) if chips else '<span class="micro"><span class="dot"></span>No global filters selected</span>')}
-            </div>
-            """,
-            unsafe_allow_html=True
+        render_filter_chips(
+            st.session_state["global_type_filters"],
+            st.session_state["global_class_filters"],
+            empty_text="No global filters selected"
         )
 
     # --- 2) P1 & P2 cards (still inside main dropdown) ---
@@ -1841,19 +2162,10 @@ with st.expander("🎲 POKÉMON RANDOMIZER", expanded=False):
             )
             st.session_state["p1_class_filters"] = st.session_state["p1_class_filters_widget"]
 
-            chips = []
-            for t in st.session_state["p1_type_filters"]:
-                chips.append(type_chip_html(t))
-            for c in st.session_state["p1_class_filters"]:
-                chips.append(f'<span class="micro"><span class="dot purple"></span>{c}</span>')
-
-            st.markdown(
-                f"""
-                <div class="microchips">
-                  {("".join(chips) if chips else '<span class="micro"><span class="dot"></span>No filters selected</span>')}
-                </div>
-                """,
-                unsafe_allow_html=True
+            render_filter_chips(
+                st.session_state["p1_type_filters"],
+                st.session_state["p1_class_filters"],
+                empty_text="No filters selected"
             )
 
     with col_right:
@@ -1898,19 +2210,10 @@ with st.expander("🎲 POKÉMON RANDOMIZER", expanded=False):
             )
             st.session_state["p2_class_filters"] = st.session_state["p2_class_filters_widget"]
 
-            chips = []
-            for t in st.session_state["p2_type_filters"]:
-                chips.append(type_chip_html(t))
-            for c in st.session_state["p2_class_filters"]:
-                chips.append(f'<span class="micro"><span class="dot purple"></span>{c}</span>')
-
-            st.markdown(
-                f"""
-                <div class="microchips">
-                  {("".join(chips) if chips else '<span class="micro"><span class="dot"></span>No filters selected</span>')}
-                </div>
-                """,
-                unsafe_allow_html=True
+            render_filter_chips(
+                st.session_state["p2_type_filters"],
+                st.session_state["p2_class_filters"],
+                empty_text="No filters selected"
             )
 
 st.markdown("<div class='section-spacer-lg'></div>", unsafe_allow_html=True)
@@ -1981,7 +2284,7 @@ with col1:
     ])
 
     # Weaknesses (types that deal >1x damage to this Pokémon)
-    weak1 = get_weaknesses(p1["types"])
+    weak1 = get_weaknesses_cached(tuple(p1["types"]))
 
     weak_badges_p1 = " ".join([
         f'<span style="background-color:{TYPE_COLORS.get(t,"#808080")};color:white;'
@@ -2012,7 +2315,7 @@ with col1:
     st.markdown("<div class='card'><div class='card-title'>Move Selection</div>", unsafe_allow_html=True)
 
     if p1["damaging_moves"]:
-        move_types_p1 = get_moves_with_types(p1["damaging_moves"])
+        move_types_p1 = get_moves_with_types(tuple(p1["damaging_moves"]))
 
         move1_choice = st.selectbox(
             "Move for Pokémon 1",
@@ -2050,7 +2353,7 @@ with col2:
     ])
 
     # Weaknesses (types that deal >1x damage to this Pokémon)
-    weak2 = get_weaknesses(p2["types"])
+    weak2 = get_weaknesses_cached(tuple(p2["types"]))
 
     weak_badges_p2 = " ".join([
         f'<span style="background-color:{TYPE_COLORS.get(t,"#808080")};color:white;'
@@ -2081,7 +2384,7 @@ with col2:
     st.markdown("<div class='card'><div class='card-title'>Move Selection</div>", unsafe_allow_html=True)
 
     if p2["damaging_moves"]:
-        move_types_p2 = get_moves_with_types(p2["damaging_moves"])
+        move_types_p2 = get_moves_with_types(tuple(p2["damaging_moves"]))
 
         move2_choice = st.selectbox(
             "Move for Pokémon 2",
@@ -2214,14 +2517,6 @@ def render_move_box(title, move_info):
 
     move_type = move_info["type"]
     type_color = TYPE_COLORS.get(move_type, "#808080")
-
-    def is_light(hex_color):
-        hex_color = hex_color.lstrip("#")
-        r = int(hex_color[0:2], 16)
-        g = int(hex_color[2:4], 16)
-        b = int(hex_color[4:6], 16)
-        brightness = (0.299*r + 0.587*g + 0.114*b)
-        return brightness > 160
 
     type_badge = (
     f'<span class="badge" '
@@ -2559,7 +2854,7 @@ st.markdown(
 )
 
 ## --- BATTLE BUTTON (styled via wrapper + CSS) ---
-st.markdown("<div class='battle-wrap'>", unsafe_allow_html=True)
+st.markdown("<div class='battle-btn'>", unsafe_allow_html=True)
 battle_button = st.button("⚔️ BATTLE! ⚔️", key="battle_btn", type="primary")
 st.markdown("</div>", unsafe_allow_html=True)
 
